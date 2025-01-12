@@ -1,0 +1,177 @@
+#include "fsm.h"
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
+
+#include <assert.h>
+
+static int handle_escape_sequence(const char *verbatim, FILE *file)
+{
+  int c;
+  switch((c = fgetc(file)))
+  {
+  // We provide the single letter escape sequence as in C. This is
+  // technically unnecessary since we actually support non-printable
+  // character in input.
+  case 'a': return '\a';
+  case 'b': return '\b';
+  case 'f': return '\f';
+  case 'n': return '\n';
+  case 'r': return '\r';
+  case 't': return '\t';
+  case 'v': return '\v';
+
+  // Hex escape sequences. Again, this is unnecessary.
+  case 'x':
+    {
+      int value = 0;
+      for(int i=0; i<2; ++i)
+      {
+        int digit = fgetc(file);
+        if('0' <= digit && digit <= '9') {
+          digit = digit - '0';
+        } else if('a' <= digit && digit <= 'f') {
+          digit = digit - 'a' + 10;
+        } else if('A' <= digit && digit <= 'F') {
+          digit = digit - 'A' + 10;
+        } else {
+          fprintf(stderr, "error: unexpected %s when interpreting hex escape sequence\n", digit != EOF ? "character" : "eof");
+          exit(EXIT_FAILURE);
+        }
+
+        value <<= 4;
+        value += digit;
+      }
+      return value;
+    }
+
+    default:
+      if(strchr(verbatim, c))
+        return c;
+
+      // The character after backslash is not special. Put it back and treat the
+      // backslash as a regular backslash.
+      ungetc(c, stdin);
+    case EOF:
+      return '\\';
+  }
+}
+
+static struct fsm fsm_from_regex(FILE *file)
+{
+  struct fsm fsm = fsm_create();
+
+  int c;
+  while((c = fgetc(file)) != EOF)
+  {
+    switch(c)
+    {
+    // Selectors
+    case '.':
+      {
+        struct fsm_state *curr_state = &da_back(fsm.states);
+        for(int i=0; i<256; ++i)
+          da_append(curr_state->transitions, ((struct fsm_transition){ .value = i, .target = fsm.states.item_count, }));
+        da_append(fsm.states, (struct fsm_state){0});
+      }
+      break;
+    case '[':
+      {
+        bool negate;
+        switch((c = fgetc(file)))
+        {
+        case '^':
+          negate = true;
+          break;
+        default:
+          ungetc(c, stdin);
+        case EOF:
+          negate = false;
+          break;
+        }
+
+        bool accept[256];
+        for(int i=0; i<256; ++i)
+          accept[i] = negate;
+
+        int range_begin = -1;
+        bool range = false;
+        while((c = fgetc(file)) != EOF && c != ']')
+        {
+          if(c == '-' && range_begin != -1 && !range)
+          {
+            range = true;
+            continue;
+          }
+
+          if(c == '\\')
+            c = handle_escape_sequence("-]", file);
+
+          if(range)
+          {
+            for(int i=range_begin+1; i<=c; ++i) accept[i] = !negate;
+            range_begin = -1;
+            range = false;
+          }
+          else
+          {
+            accept[c] = !negate;
+            range_begin = c;
+          }
+        }
+
+        struct fsm_state *curr_state = &da_back(fsm.states);
+        for(int i=0; i<256; ++i)
+          if(accept[i])
+            da_append(curr_state->transitions, ((struct fsm_transition){ .value = i, .target = fsm.states.item_count, }));
+        da_append(fsm.states, (struct fsm_state){0});
+      }
+      break;
+    default:
+      {
+        if(c == '\\')
+          c = handle_escape_sequence(".*?[", file);
+
+        struct fsm_state *curr_state = &da_back(fsm.states);
+        da_append(curr_state->transitions, ((struct fsm_transition){ .value = c, .target = fsm.states.item_count, }));
+        da_append(fsm.states, (struct fsm_state){0});
+      }
+      break;
+
+    // Modifier
+    case '*':
+    case '?':
+      {
+        if(fsm.states.item_count < 2)
+        {
+          fprintf(stderr, "error: consecutive modifiers(i.e. ? or *) not supported\n");
+          exit(EXIT_FAILURE);
+        }
+
+        da_append(fsm.states, (struct fsm_state){0});
+
+        struct fsm_state *begin_state = &da_nth_back(fsm.states, 2);
+        struct fsm_state *end_state   = &da_nth_back(fsm.states, 1);
+        struct fsm_state *next_state  = &da_nth_back(fsm.states, 0);
+
+        da_append(end_state->transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = begin_state - fsm.states.items }));
+        da_append(end_state->transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = next_state - fsm.states.items }));
+        if(c == '*')
+          da_append(begin_state->transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = next_state - fsm.states.items }));
+      }
+      break;
+    }
+  }
+
+  da_back(fsm.states).accepting = true;
+  return fsm;
+}
+
+int main()
+{
+  struct fsm fsm = fsm_from_regex(stdin);
+  fsm_write(&fsm, stdout);
+}
+

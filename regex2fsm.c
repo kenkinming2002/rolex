@@ -132,7 +132,7 @@ static struct fsm fsm_from_regex(FILE *file)
     default:
       {
         if(c == '\\')
-          c = handle_escape_sequence(".*?[", file);
+          c = handle_escape_sequence(".*+[", file);
 
         struct fsm_state *curr_state = &da_back(fsm.states);
         da_append(curr_state->transitions, ((struct fsm_transition){ .value = c, .target = fsm.states.item_count, }));
@@ -142,11 +142,11 @@ static struct fsm fsm_from_regex(FILE *file)
 
     // Modifier
     case '*':
-    case '?':
+    case '+':
       {
         if(fsm.states.item_count < 2)
         {
-          fprintf(stderr, "error: consecutive modifiers(i.e. ? or *) not supported\n");
+          fprintf(stderr, "error: consecutive modifiers(i.e. + or *) not supported\n");
           exit(EXIT_FAILURE);
         }
 

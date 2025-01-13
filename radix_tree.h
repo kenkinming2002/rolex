@@ -14,7 +14,7 @@
 ///
 /// There are two requirements for using the radix tree:
 ///   - depth is non-zero
-///   - value is non-zero
+///   - value is cannot be -1
 
 struct rt_node
 {

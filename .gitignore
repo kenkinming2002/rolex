@@ -2,3 +2,6 @@
 /fsm-dump
 /fsm-merge
 /fsm-simplify
+/example
+/generated.c
+/*.fsm

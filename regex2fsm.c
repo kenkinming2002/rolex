@@ -7,9 +7,11 @@
 
 #include <assert.h>
 
-static int handle_escape_sequence(const char *verbatim, FILE *file)
+static int handle_escape_sequence(int c, const char *verbatim, FILE *file)
 {
-  int c;
+  if(c != '\\')
+    return c;
+
   switch((c = fgetc(file)))
   {
   // We provide the single letter escape sequence as in C. This is
@@ -106,8 +108,7 @@ static struct fsm fsm_from_regex(FILE *file)
             continue;
           }
 
-          if(c == '\\')
-            c = handle_escape_sequence("-]", file);
+          c = handle_escape_sequence(c, "-]", file);
 
           if(range)
           {
@@ -131,8 +132,7 @@ static struct fsm fsm_from_regex(FILE *file)
       break;
     default:
       {
-        if(c == '\\')
-          c = handle_escape_sequence(".*+[", file);
+        c = handle_escape_sequence(c, ".*+[", file);
 
         struct fsm_state *curr_state = &da_back(fsm.states);
         da_append(curr_state->transitions, ((struct fsm_transition){ .value = c, .target = fsm.states.item_count, }));

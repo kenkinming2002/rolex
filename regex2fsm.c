@@ -149,29 +149,13 @@ static void fsm_from_regex_impl(struct fsm *fsm, FILE *file, size_t depth)
 
     // Modifier
     case '?':
-      {
-        if(begin_state_index == fsm->states.item_count - 1)
-        {
-          fprintf(stderr, "error: expected input before modifiers(i.e. ? or * or +)\n");
-          exit(EXIT_FAILURE);
-        }
-
-        da_append(fsm->states.items[begin_state_index].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = fsm->states.item_count - 1 }));
-      }
+      da_append(fsm->states.items[begin_state_index].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = fsm->states.item_count - 1 }));
       break;
     case '*':
     case '+':
-      {
-        if(begin_state_index == fsm->states.item_count - 1)
-        {
-          fprintf(stderr, "error: expected input before modifiers(i.e. ? or * or +)\n");
-          exit(EXIT_FAILURE);
-        }
-
-        da_append(fsm->states.items[fsm->states.item_count - 1].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = begin_state_index }));
-        da_append(fsm->states.items[c == '*' ? begin_state_index : fsm->states.item_count-1].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = fsm->states.item_count }));
-        da_append(fsm->states, (struct fsm_state){0});
-      }
+      da_append(fsm->states.items[fsm->states.item_count - 1].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = begin_state_index }));
+      da_append(fsm->states.items[c == '*' ? begin_state_index : fsm->states.item_count-1].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = fsm->states.item_count }));
+      da_append(fsm->states, (struct fsm_state){0});
       break;
     }
   }

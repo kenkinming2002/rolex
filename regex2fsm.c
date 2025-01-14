@@ -150,16 +150,16 @@ static struct fsm fsm_from_regex(FILE *file)
           exit(EXIT_FAILURE);
         }
 
+        // Retry transition
+        const size_t begin_state_index = fsm.states.item_count - 2;
+        const size_t end_state_index = fsm.states.item_count - 1;
+        da_append(fsm.states.items[end_state_index].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = begin_state_index }));
+
+        // Skip transition
+        const size_t skip_state_index = c == '*' ? begin_state_index : end_state_index;
+        const size_t next_state_index = fsm.states.item_count;
         da_append(fsm.states, (struct fsm_state){0});
-
-        struct fsm_state *begin_state = &da_nth_back(fsm.states, 2);
-        struct fsm_state *end_state   = &da_nth_back(fsm.states, 1);
-        struct fsm_state *next_state  = &da_nth_back(fsm.states, 0);
-
-        da_append(end_state->transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = begin_state - fsm.states.items }));
-        da_append(end_state->transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = next_state - fsm.states.items }));
-        if(c == '*')
-          da_append(begin_state->transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = next_state - fsm.states.items }));
+        da_append(fsm.states.items[skip_state_index].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = next_state_index }));
       }
       break;
     }

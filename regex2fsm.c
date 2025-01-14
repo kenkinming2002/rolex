@@ -141,6 +141,20 @@ static struct fsm fsm_from_regex(FILE *file)
       break;
 
     // Modifier
+    case '?':
+      {
+        if(fsm.states.item_count < 2)
+        {
+          fprintf(stderr, "error: consecutive modifiers(i.e. + or *) not supported\n");
+          exit(EXIT_FAILURE);
+        }
+
+        // Retry transition
+        const size_t begin_state_index = fsm.states.item_count - 2;
+        const size_t end_state_index = fsm.states.item_count - 1;
+        da_append(fsm.states.items[begin_state_index].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = end_state_index }));
+      }
+      break;
     case '*':
     case '+':
       {

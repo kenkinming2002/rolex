@@ -61,9 +61,9 @@ static int handle_escape_sequence(int c, const char *verbatim, FILE *file)
   }
 }
 
-static struct fsm fsm_from_regex(FILE *file)
+static void fsm_from_regex_impl(struct fsm *fsm, FILE *file, size_t depth)
 {
-  struct fsm fsm = fsm_create();
+  size_t begin_state_index = 0;
 
   int c;
   while((c = fgetc(file)) != EOF)
@@ -73,10 +73,10 @@ static struct fsm fsm_from_regex(FILE *file)
     // Selectors
     case '.':
       {
-        struct fsm_state *curr_state = &da_back(fsm.states);
+        begin_state_index = fsm->states.item_count - 1;
         for(int i=0; i<256; ++i)
-          da_append(curr_state->transitions, ((struct fsm_transition){ .value = i, .target = fsm.states.item_count, }));
-        da_append(fsm.states, (struct fsm_state){0});
+          da_append(fsm->states.items[begin_state_index].transitions, ((struct fsm_transition){ .value = i, .target = fsm->states.item_count, }));
+        da_append(fsm->states, (struct fsm_state){0});
       }
       break;
     case '[':
@@ -123,63 +123,66 @@ static struct fsm fsm_from_regex(FILE *file)
           }
         }
 
-        struct fsm_state *curr_state = &da_back(fsm.states);
+        begin_state_index = fsm->states.item_count - 1;
         for(int i=0; i<256; ++i)
           if(accept[i])
-            da_append(curr_state->transitions, ((struct fsm_transition){ .value = i, .target = fsm.states.item_count, }));
-        da_append(fsm.states, (struct fsm_state){0});
+            da_append(fsm->states.items[begin_state_index].transitions, ((struct fsm_transition){ .value = i, .target = fsm->states.item_count, }));
+        da_append(fsm->states, (struct fsm_state){0});
       }
+      break;
+    case '(':
+      begin_state_index = fsm->states.item_count - 1;
+      fsm_from_regex_impl(fsm, file, depth+1);
       break;
     default:
       {
-        c = handle_escape_sequence(c, ".*+[", file);
+        if(c == ')' && depth > 0)
+          return;
 
-        struct fsm_state *curr_state = &da_back(fsm.states);
-        da_append(curr_state->transitions, ((struct fsm_transition){ .value = c, .target = fsm.states.item_count, }));
-        da_append(fsm.states, (struct fsm_state){0});
+        c = handle_escape_sequence(c, ".*+?[", file);
+
+        begin_state_index = fsm->states.item_count - 1;
+        da_append(fsm->states.items[begin_state_index].transitions, ((struct fsm_transition){ .value = c, .target = fsm->states.item_count, }));
+        da_append(fsm->states, (struct fsm_state){0});
       }
       break;
 
     // Modifier
     case '?':
       {
-        if(fsm.states.item_count < 2)
+        if(begin_state_index == fsm->states.item_count - 1)
         {
-          fprintf(stderr, "error: consecutive modifiers(i.e. + or *) not supported\n");
+          fprintf(stderr, "error: expected input before modifiers(i.e. ? or * or +)\n");
           exit(EXIT_FAILURE);
         }
 
-        // Retry transition
-        const size_t begin_state_index = fsm.states.item_count - 2;
-        const size_t end_state_index = fsm.states.item_count - 1;
-        da_append(fsm.states.items[begin_state_index].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = end_state_index }));
+        da_append(fsm->states.items[begin_state_index].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = fsm->states.item_count - 1 }));
       }
       break;
     case '*':
     case '+':
       {
-        if(fsm.states.item_count < 2)
+        if(begin_state_index == fsm->states.item_count - 1)
         {
-          fprintf(stderr, "error: consecutive modifiers(i.e. + or *) not supported\n");
+          fprintf(stderr, "error: expected input before modifiers(i.e. ? or * or +)\n");
           exit(EXIT_FAILURE);
         }
 
-        // Retry transition
-        const size_t begin_state_index = fsm.states.item_count - 2;
-        const size_t end_state_index = fsm.states.item_count - 1;
-        da_append(fsm.states.items[end_state_index].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = begin_state_index }));
-
-        // Skip transition
-        const size_t skip_state_index = c == '*' ? begin_state_index : end_state_index;
-        const size_t next_state_index = fsm.states.item_count;
-        da_append(fsm.states, (struct fsm_state){0});
-        da_append(fsm.states.items[skip_state_index].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = next_state_index }));
+        da_append(fsm->states.items[fsm->states.item_count - 1].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = begin_state_index }));
+        da_append(fsm->states.items[c == '*' ? begin_state_index : fsm->states.item_count-1].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = fsm->states.item_count }));
+        da_append(fsm->states, (struct fsm_state){0});
       }
       break;
     }
   }
 
-  da_back(fsm.states).accepting = true;
+  da_back(fsm->states).accepting = true;
+}
+
+static struct fsm fsm_from_regex(FILE *file)
+{
+  struct fsm fsm = fsm_create();
+  fsm_from_regex_impl(&fsm, file, 0);
   return fsm;
 }
 

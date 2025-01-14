@@ -63,7 +63,7 @@ static int handle_escape_sequence(int c, const char *verbatim, FILE *file)
 
 static void fsm_from_regex_impl(struct fsm *fsm, FILE *file, size_t depth)
 {
-  size_t begin_state_index = 0;
+  size_t begin_state_index = fsm->states.item_count - 1;
 
   int c;
   while((c = fgetc(file)) != EOF)

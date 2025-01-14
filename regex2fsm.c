@@ -61,13 +61,12 @@ static int handle_escape_sequence(int c, const char *verbatim, FILE *file)
   }
 }
 
-static void fsm_from_regex_impl(struct fsm *fsm, FILE *file, size_t depth)
+static bool fsm_from_regex_impl(struct fsm *fsm, FILE *file, size_t depth)
 {
   size_t begin_state_index = fsm->states.item_count - 1;
 
   int c;
   while((c = fgetc(file)) != EOF)
-  {
     switch(c)
     {
     // Selectors
@@ -130,22 +129,32 @@ static void fsm_from_regex_impl(struct fsm *fsm, FILE *file, size_t depth)
         da_append(fsm->states, (struct fsm_state){0});
       }
       break;
-    case '(':
-      begin_state_index = fsm->states.item_count - 1;
-      fsm_from_regex_impl(fsm, file, depth+1);
-      break;
     default:
       {
-        if(c == ')' && depth > 0)
-          return;
-
-        c = handle_escape_sequence(c, ".*+?[", file);
+        c = handle_escape_sequence(c, ".[()?*+", file);
 
         begin_state_index = fsm->states.item_count - 1;
         da_append(fsm->states.items[begin_state_index].transitions, ((struct fsm_transition){ .value = c, .target = fsm->states.item_count, }));
         da_append(fsm->states, (struct fsm_state){0});
       }
       break;
+
+    // Group
+    case '(':
+      begin_state_index = fsm->states.item_count - 1;
+      if(!fsm_from_regex_impl(fsm, file, depth+1))
+      {
+        fprintf(stderr, "error: missing ) after (\n");
+        exit(EXIT_FAILURE);
+      }
+      break;
+    case ')':
+      if(depth == 0)
+      {
+        fprintf(stderr, "error: unexpected ) without matching (\n");
+        exit(EXIT_FAILURE);
+      }
+      return true;
 
     // Modifier
     case '?':
@@ -158,15 +167,15 @@ static void fsm_from_regex_impl(struct fsm *fsm, FILE *file, size_t depth)
       da_append(fsm->states, (struct fsm_state){0});
       break;
     }
-  }
 
-  da_back(fsm->states).accepting = true;
+  return false;
 }
 
 static struct fsm fsm_from_regex(FILE *file)
 {
   struct fsm fsm = fsm_create();
   fsm_from_regex_impl(&fsm, file, 0);
+  da_back(fsm.states).accepting = true;
   return fsm;
 }
 

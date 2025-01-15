@@ -182,7 +182,7 @@ static bool fsm_from_regex_impl(struct fsm *fsm, FILE *file)
   return false;
 }
 
-static struct fsm fsm_from_regex(FILE *file)
+static struct fsm fsm_from_regex(FILE *file, char *name)
 {
   struct fsm fsm = fsm_create();
   if(fsm_from_regex_impl(&fsm, file))
@@ -190,13 +190,23 @@ static struct fsm fsm_from_regex(FILE *file)
     fprintf(stderr, "error: unexpected ) without matching (\n");
     exit(EXIT_FAILURE);
   }
-  da_back(fsm.states).accepting = true;
+
+  da_append(da_back(fsm.states).accepts, ((struct fsm_accept) { .length = strlen(name), .data = name, }));
   return fsm;
 }
 
-int main()
+static void usage(char *program_name)
 {
-  struct fsm fsm = fsm_from_regex(stdin);
+  fprintf(stderr, "Usage: %s NAME\n", program_name);
+  exit(EXIT_FAILURE);
+}
+
+int main(int argc, char *argv[])
+{
+  if(argc != 2)
+    usage(argv[0]);
+
+  struct fsm fsm = fsm_from_regex(stdin, argv[1]);
   fsm_write(&fsm, stdout);
 }
 

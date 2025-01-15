@@ -53,11 +53,30 @@ static bool read_entire_file(const char *path, char **data, size_t *length)
   return true;
 }
 
+enum token_type {
+  TOKEN_TYPE_SPACE,
+  TOKEN_TYPE_IDENTIFIER,
+  TOKEN_TYPE_INTEGER,
+  TOKEN_TYPE_FLOAT,
+};
+
+const char *token_type_to_str(enum token_type value)
+{
+  switch(value)
+  {
+  case TOKEN_TYPE_SPACE: return "space";
+  case TOKEN_TYPE_IDENTIFIER: return "identifier";
+  case TOKEN_TYPE_INTEGER: return "integer";
+  case TOKEN_TYPE_FLOAT: return "float";
+  }
+}
+
 static char *data;
 static size_t length;
 
 static char *curr_p;
 static char *best_p;
+static enum token_type best_type;
 
 int rolex_getc(void)
 {
@@ -65,10 +84,17 @@ int rolex_getc(void)
   return *curr_p++;
 }
 
-void rolex_accept(void)
-{
-  best_p = curr_p;
-}
+#define accept(name, type) \
+  void rolex_accept_##name(void) \
+  { \
+    best_p = curr_p; \
+    best_type = type; \
+  }
+
+accept(space, TOKEN_TYPE_SPACE)
+accept(identifier, TOKEN_TYPE_IDENTIFIER)
+accept(integer, TOKEN_TYPE_INTEGER)
+accept(float, TOKEN_TYPE_FLOAT)
 
 static void usage(char *program_name)
 {
@@ -97,7 +123,7 @@ int main(int argc, char *argv[])
     }
 
     size_t n = best_p - data;
-    printf("info: Accepted <%.*s>\n", (int)n, data);
+    printf("info: Accepted %s <%.*s>\n", token_type_to_str(best_type), (int)n, data);
     data += n;
     length -= n;
   }

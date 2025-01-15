@@ -6,5 +6,5 @@ generated.c: fsm-dump fsm-merge fsm-simplify space.fsm identifier.fsm integer.fs
 	./fsm-merge space.fsm identifier.fsm integer.fsm float.fsm | ./fsm-simplify | ./fsm-dump c > $@
 
 %.fsm: %.regex regex2fsm
-	./regex2fsm < $< > $@
+	./regex2fsm $* < $< > $@
 

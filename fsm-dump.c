@@ -8,7 +8,7 @@ static void fsm_dump_dot(const struct fsm *fsm, FILE *out)
   for(size_t state_index=0; state_index<fsm->states.item_count; ++state_index)
   {
     const struct fsm_state *state = &fsm->states.items[state_index];
-    if(state->accepting)
+    if(state->accepts.item_count > 0)
       fprintf(out, "  %zu [color=\"green\"];", state_index);
 
     for(size_t transition_index=0; transition_index<state->transitions.item_count; ++transition_index)
@@ -38,8 +38,13 @@ static void fsm_dump_c_code(const struct fsm *fsm, FILE *out)
     const struct fsm_state *state = &fsm->states.items[state_index];
     fprintf(out, "\n");
     fprintf(out, "state_%zu:\n", state_index);
-    if(state->accepting)
-      fprintf(out, "  rolex_accept();\n");
+
+    for(size_t accept_index=0; accept_index<state->accepts.item_count; ++accept_index)
+    {
+      const struct fsm_accept *accept = &state->accepts.items[accept_index];
+      fprintf(out, "  extern void rolex_accept_%.*s(void);\n", (int)accept->length, accept->data);
+      fprintf(out, "  rolex_accept_%.*s();\n", (int)accept->length, accept->data);
+    }
 
     fprintf(out, "  switch((c = rolex_getc()))\n");
     fprintf(out, "  {\n");

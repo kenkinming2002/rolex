@@ -34,8 +34,7 @@ static size_t powerset_construction_impl(struct fsm *output, const struct fsm *i
     da_append(output->states, (struct fsm_state){0});
     for(size_t state_index=0; state_index<input->states.item_count; ++state_index)
       if(states[state_index])
-        if(input->states.items[state_index].accepting)
-          output->states.items[index].accepting = true;
+        da_append_many(output->states.items[index].accepts, input->states.items[state_index].accepts.items, input->states.items[state_index].accepts.item_count);
 
     // Check what state a reachable after a single transition.
     bool reachable[256];

@@ -22,10 +22,18 @@ struct fsm_transition
 
 da_define(fsm_transitions, struct fsm_transition);
 
+struct fsm_accept
+{
+  size_t length;
+  char *data;
+};
+
+da_define(fsm_accepts, struct fsm_accept);
+
 struct fsm_state
 {
   struct fsm_transitions transitions;
-  bool accepting;
+  struct fsm_accepts accepts;
 };
 
 da_define(fsm_states, struct fsm_state);
@@ -59,12 +67,21 @@ static void fsm_transition_write(const struct fsm_transition *transition, FILE *
   do_write(transition->target);
 }
 
+static void fsm_accept_write(const struct fsm_accept *accept, FILE *file)
+{
+  do_write(accept->length);
+  do_write(*(char(*)[accept->length])accept->data);
+}
+
 static void fsm_state_write(const struct fsm_state *state, FILE *file)
 {
   do_write(state->transitions.item_count);
   for(size_t i=0; i<state->transitions.item_count; ++i)
     fsm_transition_write(&state->transitions.items[i], file);
-  do_write(state->accepting);
+
+  do_write(state->accepts.item_count);
+  for(size_t i=0; i<state->accepts.item_count; ++i)
+    fsm_accept_write(&state->accepts.items[i], file);
 }
 
 static void fsm_write(const struct fsm *fsm, FILE *file)
@@ -91,13 +108,24 @@ static void fsm_transition_read(struct fsm_transition *transition, FILE *file)
   do_read(transition->target);
 }
 
+static void fsm_accept_read(struct fsm_accept *accept, FILE *file)
+{
+  do_read(accept->length);
+  accept->data = malloc(accept->length);
+  do_read(*(char(*)[accept->length])accept->data);
+}
+
 static void fsm_state_read(struct fsm_state *state, FILE *file)
 {
   do_read(state->transitions.item_count);
   da_alloc_exact(state->transitions);
   for(size_t i=0; i<state->transitions.item_count; ++i)
     fsm_transition_read(&state->transitions.items[i], file);
-  do_read(state->accepting);
+
+  do_read(state->accepts.item_count);
+  da_alloc_exact(state->accepts);
+  for(size_t i=0; i<state->accepts.item_count; ++i)
+    fsm_accept_read(&state->accepts.items[i], file);
 }
 
 static void fsm_read(struct fsm *fsm, FILE *file)

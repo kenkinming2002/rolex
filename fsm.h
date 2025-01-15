@@ -13,10 +13,7 @@
 
 struct fsm_transition
 {
-  // FIXME: Realistically, we only 256+1 distinct value here. 256 for 256 value
-  // of a byte and the last for epsilon transition. We want to be able to use
-  // uint8_t here, by how do we squeeze an out an extra possible value.
-  int value;
+  int16_t value;
   size_t target;
 };
 

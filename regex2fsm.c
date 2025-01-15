@@ -61,7 +61,7 @@ static int handle_escape_sequence(int c, const char *verbatim, FILE *file)
   }
 }
 
-static bool fsm_from_regex_impl(struct fsm *fsm, FILE *file, size_t depth)
+static bool fsm_from_regex_impl(struct fsm *fsm, FILE *file)
 {
   size_t begin_state_index_greedy = fsm->states.item_count - 1;
   size_t begin_state_index = fsm->states.item_count - 1;
@@ -143,18 +143,13 @@ static bool fsm_from_regex_impl(struct fsm *fsm, FILE *file, size_t depth)
     // Group
     case '(':
       begin_state_index = fsm->states.item_count - 1;
-      if(!fsm_from_regex_impl(fsm, file, depth+1))
+      if(!fsm_from_regex_impl(fsm, file))
       {
         fprintf(stderr, "error: missing ) after (\n");
         exit(EXIT_FAILURE);
       }
       break;
     case ')':
-      if(depth == 0)
-      {
-        fprintf(stderr, "error: unexpected ) without matching (\n");
-        exit(EXIT_FAILURE);
-      }
       return true;
     case '|':
       {
@@ -163,7 +158,7 @@ static bool fsm_from_regex_impl(struct fsm *fsm, FILE *file, size_t depth)
         da_append(fsm->states, (struct fsm_state){0});
 
         size_t begin_state_index_new = fsm->states.item_count - 1;
-        bool result = fsm_from_regex_impl(fsm, file, depth);
+        bool result = fsm_from_regex_impl(fsm, file);
         size_t end_state_index_new = fsm->states.item_count - 1;
 
         da_append(fsm->states.items[begin_state_index_greedy].transitions, ((struct fsm_transition) { .value = FSM_EPSILON, .target = begin_state_index_new }));
@@ -190,7 +185,11 @@ static bool fsm_from_regex_impl(struct fsm *fsm, FILE *file, size_t depth)
 static struct fsm fsm_from_regex(FILE *file)
 {
   struct fsm fsm = fsm_create();
-  fsm_from_regex_impl(&fsm, file, 0);
+  if(fsm_from_regex_impl(&fsm, file))
+  {
+    fprintf(stderr, "error: unexpected ) without matching (\n");
+    exit(EXIT_FAILURE);
+  }
   da_back(fsm.states).accepting = true;
   return fsm;
 }
